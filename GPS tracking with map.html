@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tractor GPS & Environment Tracker</title>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    
+    <!-- Firebase SDK v8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        h2 {
+            margin-top: 20px;
+            color: #333;
+        }
+
+        #map {
+            height: 500px;
+            width: 90%;
+            max-width: 1200px;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .gps-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+            width: 80%;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        .gps-card h3 {
+            color: #333;
+        }
+
+        .gps-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .gps-table th, .gps-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .gps-table th {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .gps-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h2>🚜 Tractor GPS & Environmental Monitoring</h2>
+    <div id="map"></div>
+
+    <div class="gps-card">
+        <h3>📍 Latest Sensor Readings</h3>
+        <table class="gps-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Temperature (°C)</th>
+                    <th>Humidity (%)</th>
+                </tr>
+            </thead>
+            <tbody id="gps-table-body">
+                <!-- Data will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKAxhaBYZ6w-0RRtWGIvUgCG5VsOsJe8",
+            authDomain: "esp-32-chriz.firebaseapp.com",
+            databaseURL: "https://esp-32-chriz-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "esp-32-chriz",
+            storageBucket: "esp-32-chriz.appspot.com",
+            messagingSenderId: "900573562669",
+            appId: "1:900573562669:web:0cfc2e5ce8986b576875a4"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        const map = L.map('map').setView([8.714480667, 77.771310667], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markers = [];
+        let pathLine = null;
+
+        function fetchGPSData() {
+            const tractorRef = database.ref('/tractors/Tractor1/readings');
+            
+            tractorRef.on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    const gpsPoints = Object.values(data).map(obj => ({
+                        time: obj.timestamp,
+                        latitude: obj.latitude,
+                        longitude: obj.longitude,
+                        temperature: obj.temperature,
+                        humidity: obj.humidity
+                    }));
+
+                    markers.forEach(marker => map.removeLayer(marker));
+                    markers = [];
+
+                    gpsPoints.forEach(point => {
+                        let marker = L.marker([point.latitude, point.longitude]).addTo(map)
+                            .bindPopup(`Time: ${point.time}<br>Lat: ${point.latitude}<br>Lng: ${point.longitude}<br>Temp: ${point.temperature}°C<br>Humidity: ${point.humidity}%`);
+                        markers.push(marker);
+                    });
+
+                    const bounds = gpsPoints.map(p => [p.latitude, p.longitude]);
+                    if (bounds.length > 0) map.fitBounds(bounds);
+
+                    if (pathLine) map.removeLayer(pathLine);
+                    pathLine = L.polyline(bounds, { color: 'blue' }).addTo(map);
+
+                    updateTable(gpsPoints);
+                }
+            });
+        }
+
+        function updateTable(gpsPoints) {
+            const tableBody = document.getElementById("gps-table-body");
+            tableBody.innerHTML = "";
+
+            gpsPoints.slice().reverse().forEach(point => {
+                let row = tableBody.insertRow();
+                row.insertCell(0).innerText = point.time;
+                row.insertCell(1).innerText = point.latitude;
+                row.insertCell(2).innerText = point.longitude;
+                row.insertCell(3).innerText = point.temperature;
+                row.insertCell(4).innerText = point.humidity;
+            });
+        }
+
+        fetchGPSData();
+    </script>
+</body>
+</html>
